@@ -75,8 +75,6 @@ public class LoginDialog extends JDialog {
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         connectButton = new JButton("连接服务器");
-        connectButton.setBackground(new Color(33, 150, 243));
-        connectButton.setForeground(Color.WHITE);
         add(connectButton, gbc);
 
         gbc.gridx = 0;

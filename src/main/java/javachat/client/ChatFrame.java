@@ -59,8 +59,6 @@ public class ChatFrame extends JFrame implements MessageListener {
 
 
         sendButton = new JButton("发送");
-        sendButton.setBackground(new Color(33, 150, 243));
-        sendButton.setForeground(Color.WHITE);
         sendButton.setFocusPainted(false);
         sendButton.setPreferredSize(new Dimension(60, 32));
 
