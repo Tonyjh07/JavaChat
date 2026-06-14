@@ -1,9 +1,10 @@
 plugins {
     id 'java'
+    id 'application'
 }
 
-group = 'org.example'
-version = '1.0-SNAPSHOT'
+group = 'org.dpdns.tonyjh07'
+version = 'b0.1'
 
 repositories {
     mavenCentral()
@@ -15,6 +16,58 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-test {
-    useJUnitPlatform()
+tasks.withType(Jar).configureEach {
+    from sourceSets.main.output
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+task serverJar(type: Jar) {
+    archiveBaseName = 'chat-server'
+    archiveVersion = version
+    manifest {
+        attributes(
+                'Main-Class': 'javachat.server.ServerMain',
+                'Implementation-Title': 'Chat Server',
+                'Implementation-Version': version
+        )
+    }
+    // 只包含服务端和 common 代码
+    from(sourceSets.main.output) {
+        include 'javachat/common/**'
+        include 'javachat/server/**'
+    }
+    // 从依赖中复制（如果没有依赖可以省略）
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+// 客户端 JAR 配置
+task clientJar(type: Jar) {
+    archiveBaseName = 'chat-client'
+    archiveVersion = version
+    manifest {
+        attributes(
+                'Main-Class': 'javachat.client.ClientMain',
+                'Implementation-Title': 'Chat Client',
+                'Implementation-Version': version
+        )
+    }
+    from(sourceSets.main.output) {
+        include 'javachat/common/**'
+        include 'javachat/client/**'
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+
+task buildJars {
+    dependsOn serverJar, clientJar
+    description = '打包服务端和客户端 JAR'
+}
+
+jar {
+    enabled = false
 }
