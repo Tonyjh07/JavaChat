@@ -2,23 +2,25 @@ package javachat.server;
 
 import javachat.common.Command;
 import javachat.common.Message;
-import javachat.server.ChatServer;
+import javachat.server.manager.ClientManager;
+import javachat.server.router.MessageRouter;
 
-import java.net.*;
+import java.net.Socket;
 import java.io.*;
-import java.util.*;
 
 public class ClientHandler implements Runnable {
     private Socket socket;
     private ObjectInputStream in;
     private ObjectOutputStream out;
     private String name;
-    private ChatServer server;
+    private final ClientManager clientManager;
+    private final MessageRouter messageRouter;
     private volatile boolean running;
 
-    public ClientHandler(Socket socket, ChatServer server) {
+    public ClientHandler(Socket socket, ClientManager clientManager, MessageRouter messageRouter) {
         this.socket = socket;
-        this.server = server;
+        this.clientManager = clientManager;
+        this.messageRouter = messageRouter;
         this.running = true;
     }
 
@@ -36,7 +38,8 @@ public class ClientHandler implements Runnable {
                         handleLogin(message);
                         break;
                     case MESSAGE_GROUP:
-                        handleGroupMessage(message);
+                    case PRIVATE_MSG:
+                        messageRouter.route(message, this);
                         break;
                     case LOGOUT:
                         handleLogout();
@@ -46,10 +49,13 @@ public class ClientHandler implements Runnable {
                 }
             }
         } catch (EOFException e) {
-            System.out.println("客户端"+(name != null ? " " + name : "")+"断开连接");
-        } catch (IOException | ClassNotFoundException e) {
-            System.out.println("客户端"+(name != null ? " " + name : "")+"连接异常："+e.getMessage());
-            e.printStackTrace();
+            System.out.println("客户端" + (name != null ? " " + name : "") + "断开连接");
+        } catch (IOException e) {
+            if (running) {
+                System.out.println("客户端" + (name != null ? " " + name : "") + "连接异常：" + e.getMessage());
+            }
+        } catch (ClassNotFoundException e) {
+            System.out.println("客户端" + (name != null ? " " + name : "") + "消息解析异常：" + e.getMessage());
         } finally {
             close();
         }
@@ -58,31 +64,36 @@ public class ClientHandler implements Runnable {
     private void handleLogin(Message message) throws IOException {
         String requestedName = message.getSender();
 
-        if (server.isNameExist(requestedName)) {
+        if (clientManager.isNameExists(requestedName)) {
             Message failMsg = new Message("SERVER", Command.LOGIN_FAIL, "用户名已存在");
             sendMessage(failMsg);
-
             close();
         } else {
             this.name = requestedName;
-            server.addClient(this);
+            clientManager.addClient(name, this);
 
-            Message successMsg = new Message("SERVER", Command.LOGIN_SUCCESS, name+"登录成功");
+            Message successMsg = new Message("SERVER", Command.LOGIN_SUCCESS, name + "登录成功");
             sendMessage(successMsg);
 
-            System.out.println("用户"+name+"已登录");
+            broadcastUserList();
+
+            System.out.println("用户" + name + "已登录");
         }
     }
 
-    private void handleGroupMessage(Message message) throws IOException {
-        message.setSender(name); //防止客户端伪造发送者信息
-
-        server.sendGroupMessage(message);
+    private void handleLogout() throws IOException {
+        System.out.println("用户" + name + "已退出");
+        close();
     }
 
-    private void handleLogout() throws IOException {
-        System.out.println("用户"+name+"已退出");
-        close();
+    private void broadcastUserList() {
+        StringBuilder userList = new StringBuilder("群聊"); // 添加群聊入口
+        for (String userName : clientManager.getAllNames()) {
+            userList.append(",");
+            userList.append(userName);
+        }
+        Message userListMsg = new Message("SERVER", Command.USER_LIST, userList.toString());
+        clientManager.broadcastToAll(userListMsg);
     }
 
     public void sendMessage(Message message) {
@@ -90,47 +101,45 @@ public class ClientHandler implements Runnable {
             out.writeObject(message);
             out.flush();
         } catch (IOException e) {
-            System.err.println("用户"+name+"消息发送失败："+e.getMessage());
+            System.err.println("用户" + name + "消息发送失败：" + e.getMessage());
             close();
         }
     }
 
     public void close() {
-        if (!running) { //幂等性处理
+        if (!running) {
             return;
         }
 
         running = false;
 
-        if (name != null){
-            server.removeClient(name);
+        if (name != null) {
+            clientManager.removeClient(name);
+            broadcastUserList();
         }
 
         try {
-            if (in != null){
+            if (in != null) {
                 in.close();
             }
-        }catch (IOException e) {
-            System.err.println("用户"+name+"输入流关闭失败："+e.getMessage());
-            e.printStackTrace();
+        } catch (IOException e) {
+            // 忽略关闭异常
         }
 
         try {
-            if (out != null){
+            if (out != null) {
                 out.close();
             }
-        }catch (IOException e) {
-            System.err.println("用户"+name+"输出流关闭失败："+e.getMessage());
-            e.printStackTrace();
+        } catch (IOException e) {
+            // 忽略关闭异常
         }
 
         try {
-            if (socket != null){
+            if (socket != null) {
                 socket.close();
             }
-        }catch (IOException e) {
-            System.err.println("用户"+name+"Socket关闭失败："+e.getMessage());
-            e.printStackTrace();
+        } catch (IOException e) {
+            // 忽略关闭异常
         }
     }
 

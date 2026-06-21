@@ -7,4 +7,9 @@ public enum Command {
     LOGOUT,
 
     MESSAGE_GROUP,
+    PRIVATE_MSG,
+    SYSTEM_MSG,
+    ERROR,
+
+    USER_LIST
 }

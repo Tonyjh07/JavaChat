@@ -4,12 +4,13 @@ import java.io.Serializable;
 
 public class Message implements Serializable {
     private String sender;
+    private String receiver;
     private Command command;
     private String content;
     private long timestamp;
 
     public Message(String sender, Command command, String content) {
-        this(sender,command,content,System.currentTimeMillis());
+        this(sender, command, content, System.currentTimeMillis());
     }
 
     public Message(String sender, Command command, String content, long timestamp) {
@@ -28,6 +29,14 @@ public class Message implements Serializable {
 
     public void setSender(String sender) {
         this.sender = sender;
+    }
+
+    public String getReceiver() {
+        return receiver;
+    }
+
+    public void setReceiver(String receiver) {
+        this.receiver = receiver;
     }
 
     public Command getCommand() {

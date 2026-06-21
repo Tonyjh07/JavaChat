@@ -1,12 +1,13 @@
 package javachat.client;
 
+import javachat.client.listener.MessageListener;
 import javachat.common.Message;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.util.List;
 
 public class LoginDialog extends JDialog {
 
@@ -88,13 +89,6 @@ public class LoginDialog extends JDialog {
     private void setupListeners() {
         connectButton.addActionListener(e -> onConnect());
 
-        Action enterAction = new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                onConnect();
-            }
-        };
-
         hostField.addActionListener(e -> onConnect());
         portField.addActionListener(e -> onConnect());
         nameField.addActionListener(e -> onConnect());
@@ -147,11 +141,8 @@ public class LoginDialog extends JDialog {
         public void onLoginResult(boolean success, String message) {
             SwingUtilities.invokeLater(() -> {
                 if (success) {
-                    showStatus("登录成功！正在打开聊天室...", true);
+                    showStatus("登录成功！", true);
                     loginSuccess = true;
-
-                    openChatFrame();
-
                     dispose();
                 } else {
                     showStatus("登录失败：" + message, false);
@@ -165,29 +156,30 @@ public class LoginDialog extends JDialog {
         }
 
         @Override
+        public void onUserListUpdated(List<String> users) {
+        }
+
+        @Override
         public void onDisconnected() {
             SwingUtilities.invokeLater(() -> {
-                if (loginSuccess) {
-                } else {
+                if (!loginSuccess) {
                     showStatus("连接已断开", false);
                     setInputEnabled(true);
                 }
             });
         }
-    }
 
-    private void openChatFrame() {
-        ChatFrame chatFrame = new ChatFrame(chatClient);
-        chatFrame.setVisible(true);
+        @Override
+        public void onConnectionStatusChanged(boolean connected, String reason) {
+        }
     }
-
 
     private void showStatus(String message, boolean isGood) {
         statusLabel.setText(message);
         if (isGood) {
-            statusLabel.setForeground(new Color(76, 175, 80));  // 绿色
+            statusLabel.setForeground(new Color(76, 175, 80));
         } else {
-            statusLabel.setForeground(new Color(244, 67, 54));  // 红色
+            statusLabel.setForeground(new Color(244, 67, 54));
         }
     }
 

@@ -1,14 +1,18 @@
-package javachat.client;
+package javachat.client.ui;
 
+import javachat.client.ChatClient;
+import javachat.client.listener.MessageListener;
+import javachat.client.manager.FrameManager;
+import javachat.common.ChatType;
 import javachat.common.Command;
 import javachat.common.Message;
 
+import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import javax.swing.*;
 
 public class ChatFrame extends JFrame implements MessageListener {
     private JTextArea chatArea;
@@ -19,21 +23,28 @@ public class ChatFrame extends JFrame implements MessageListener {
     private String name;
     private SimpleDateFormat timeFormat;
     private JScrollPane chatScrollPane;
+    private ChatType chatType;
+    private String sessionId;
+    private String displayName;
+    private FrameManager frameManager;
 
-    public ChatFrame(ChatClient chatClient) {
+    public ChatFrame(ChatClient chatClient, ChatType chatType, String sessionId, String displayName) {
         this.chatClient = chatClient;
         this.name = chatClient.getName();
         this.timeFormat = new SimpleDateFormat("HH:mm:ss");
-
-        chatClient.setListener(this);
+        this.chatType = chatType;
+        this.sessionId = sessionId;
+        this.displayName = displayName;
+        this.frameManager = FrameManager.getInstance();
 
         initUI();
         setupListeners();
 
-        setTitle("聊天室 - " + name);
+        String title = chatType == ChatType.GROUP ? "群聊 - " + displayName : "私聊 - " + displayName;
+        setTitle(title);
         setSize(500, 450);
         setLocationRelativeTo(null);
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
     }
 
     private void initUI() {
@@ -56,7 +67,6 @@ public class ChatFrame extends JFrame implements MessageListener {
         inputField = new JTextField();
         inputField.setFont(new Font("微软雅黑", Font.PLAIN, 14));
         inputField.setPreferredSize(new Dimension(0, 30));
-
 
         sendButton = new JButton("发送");
         sendButton.setFocusPainted(false);
@@ -83,7 +93,7 @@ public class ChatFrame extends JFrame implements MessageListener {
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                onWindowClosing();
+                frameManager.closeChat(sessionId);
             }
         });
     }
@@ -97,11 +107,15 @@ public class ChatFrame extends JFrame implements MessageListener {
 
         inputField.setText("");
 
-        Message msg = new Message(name, Command.MESSAGE_GROUP, content);
-
-
         if (chatClient.isConnected()) {
-            chatClient.sendMessage(msg);
+            switch (chatType) {
+                case GROUP:
+                    chatClient.sendGroupMessage(content);
+                    break;
+                case PRIVATE:
+                    chatClient.sendPrivateMessage(sessionId, content);
+                    break;
+            }
         } else {
             showStatus("连接已断开，无法发送消息", false);
         }
@@ -111,13 +125,25 @@ public class ChatFrame extends JFrame implements MessageListener {
 
     @Override
     public void onMessageReceived(Message message) {
+        boolean shouldDisplay = false;
+
         switch (message.getCommand()) {
             case MESSAGE_GROUP:
-                appendMessage(message);
+                shouldDisplay = chatType == ChatType.GROUP;
                 break;
-
+            case PRIVATE_MSG:
+                if (chatType == ChatType.PRIVATE) {
+                    String sender = message.getSender();
+                    String receiver = message.getReceiver();
+                    shouldDisplay = sender.equals(sessionId) || receiver.equals(sessionId);
+                }
+                break;
             default:
                 break;
+        }
+
+        if (shouldDisplay) {
+            appendMessage(message);
         }
     }
 
@@ -154,25 +180,16 @@ public class ChatFrame extends JFrame implements MessageListener {
         }
     }
 
-    private void onWindowClosing() {
-        int choice = JOptionPane.showConfirmDialog(
-                this,
-                "确定要退出聊天室吗？",
-                "退出确认",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.QUESTION_MESSAGE
-        );
-
-        if (choice == JOptionPane.YES_OPTION) {
-            if (chatClient != null) {
-                chatClient.disconnect();
-            }
-            System.exit(0);
-        }
+    public String getSessionId() {
+        return sessionId;
     }
 
     @Override
     public void onLoginResult(boolean success, String message) {
+    }
+
+    @Override
+    public void onUserListUpdated(java.util.List<String> users) {
     }
 
     @Override
@@ -185,5 +202,9 @@ public class ChatFrame extends JFrame implements MessageListener {
 
             appendSystemMessage("与服务器的连接已断开，请重新启动程序");
         });
+    }
+
+    @Override
+    public void onConnectionStatusChanged(boolean connected, String reason) {
     }
 }

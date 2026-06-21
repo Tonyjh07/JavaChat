@@ -1,10 +1,16 @@
 package javachat.client;
 
-import javachat.common.*;
+import javachat.client.listener.MessageListener;
+import javachat.client.manager.FrameManager;
+import javachat.client.ui.MainFrame;
+import javachat.common.Command;
+import javachat.common.Message;
 
-import java.net.*;
-import java.io.*;
 import javax.swing.*;
+import java.io.*;
+import java.net.Socket;
+import java.util.Arrays;
+import java.util.List;
 
 public class ChatClient {
     private String host;
@@ -16,6 +22,8 @@ public class ChatClient {
     private volatile boolean connected = false;
     private MessageListener listener;
     private Thread receiveThread;
+    private FrameManager frameManager;
+    private MainFrame mainFrame;
 
     public ChatClient() {
     }
@@ -44,14 +52,24 @@ public class ChatClient {
             Message response = (Message) in.readObject();
 
             if (response.getCommand() == Command.LOGIN_SUCCESS) {
-
                 connected = true;
 
-                startReceiveThread();
-
+                // 先通知原来的 listener（LoginDialog）登录成功
                 if (listener != null) {
                     listener.onLoginResult(true, response.getContent());
                 }
+
+                frameManager = FrameManager.getInstance();
+                frameManager.init(this);
+
+                mainFrame = new MainFrame(this);
+                mainFrame.setVisible(true);
+
+                // 然后替换 listener 为 MainFrame
+                setListener(mainFrame);
+
+                startReceiveThread();
+
                 return true;
             } else {
                 String failReason = response.getContent();
@@ -69,6 +87,17 @@ public class ChatClient {
             close();
             return false;
         }
+    }
+
+    public void sendGroupMessage(String content) {
+        Message msg = new Message(name, Command.MESSAGE_GROUP, content);
+        sendMessage(msg);
+    }
+
+    public void sendPrivateMessage(String receiver, String content) {
+        Message msg = new Message(name, Command.PRIVATE_MSG, content);
+        msg.setReceiver(receiver);
+        sendMessage(msg);
     }
 
     public void sendMessage(Message message) {
@@ -99,6 +128,13 @@ public class ChatClient {
                         SwingUtilities.invokeLater(() -> {
                             listener.onMessageReceived(message);
                         });
+
+                        if (message.getCommand() == Command.USER_LIST) {
+                            List<String> users = Arrays.asList(message.getContent().split(","));
+                            SwingUtilities.invokeLater(() -> {
+                                listener.onUserListUpdated(users);
+                            });
+                        }
                     }
                 } catch (EOFException e) {
                     System.out.println("连接已断开");
@@ -165,5 +201,9 @@ public class ChatClient {
 
     public void setListener(MessageListener listener) {
         this.listener = listener;
+    }
+
+    public MainFrame getMainFrame() {
+        return mainFrame;
     }
 }
